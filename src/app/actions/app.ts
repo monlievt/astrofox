@@ -467,6 +467,7 @@ export async function startVideoRecording({
       const audioBuffer = activeTrack?.audio?.buffer ?? null;
 
       const trackInfo = {
+        id: activeTrack?.id,
         file: audioSource || (activeTrack?.file as File),
         name: activeTrack?.name || 'audio',
         startTime: clampedStartTime,
@@ -694,6 +695,7 @@ export async function startPlaylistVideoRecording({
           const fileData = await api.readAudioFile(track.file);
           const audio = await loadAudioData(fileData);
           exporterTracks.push({
+            id: track.id,
             file: track.file,
             name: track.name,
             startTime: track.startTime ?? 0,

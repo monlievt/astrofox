@@ -156,14 +156,15 @@ function App() {
       setHasRecovery(true);
     }
 
-    // Register unsaved changes checker for Electron's before-quit native dialog
-    // The preload exposes window.__astrofox_set_unsaved so main.ts can call it on close
-    if (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__astrofox_set_unsaved) {
-      const setUnsaved = (window as unknown as Record<string, unknown>).__astrofox_set_unsaved as (fn: () => boolean) => void;
-      setUnsaved(() => {
-        const { opened, lastModified } = projectStore.getState();
-        return lastModified > opened;
+    // Sync unsaved changes flag with Electron main process
+    let unsubscribe: (() => void) | undefined;
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.setUnsavedChanges) {
+      unsubscribe = projectStore.subscribe((state) => {
+        const isUnsaved = state.lastModified > state.opened;
+        (window as any).electronAPI.setUnsavedChanges(isUnsaved);
       });
+      const state = projectStore.getState();
+      (window as any).electronAPI.setUnsavedChanges(state.lastModified > state.opened);
     }
 
     // Tab Close/Exit Warning Event Listener
@@ -178,6 +179,9 @@ function App() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
   }, []);
 

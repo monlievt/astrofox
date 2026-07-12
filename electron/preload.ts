@@ -19,6 +19,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('updater:update-available', (_event, info) => callback(info)),
   onUpdateDownloaded: (callback: (info: object) => void) =>
     ipcRenderer.on('updater:update-downloaded', (_event, info) => callback(info)),
+
+  // Sync unsaved changes flag
+  setUnsavedChanges: (hasUnsaved: boolean) =>
+    ipcRenderer.send('app:set-unsaved-changes', hasUnsaved),
 });
 
 // ─── Expose unsaved changes state bridge ─────────────────────────────────────

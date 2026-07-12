@@ -1,7 +1,7 @@
 import { Muxer as WebmMuxer, ArrayBufferTarget as WebmArrayBufferTarget } from 'webm-muxer';
 import { Muxer as Mp4Muxer, ArrayBufferTarget as Mp4ArrayBufferTarget } from 'mp4-muxer';
 import { logger } from '@/app/global';
-import { loadAudioFile } from '@/app/actions/audio';
+import useAudioStore from '@/app/actions/audio';
 
 interface ExportProgressCallback {
   (progress: number, statusText: string): void;
@@ -37,6 +37,8 @@ export async function exportVideoOffline({
 }): Promise<Blob> {
   const width = canvas.width;
   const height = canvas.height;
+
+  const originalActiveTrackId = useAudioStore.getState().activeTrackId;
 
   // Calculate total duration and frames
   const totalDuration = tracks.reduce((sum, t) => sum + (t.endTime - t.startTime), 0);
@@ -146,11 +148,17 @@ export async function exportVideoOffline({
     const track = tracks[tIdx];
     logger.log(`[WebCodecsExport] Processing track ${tIdx + 1}/${tracks.length}: ${track.name}`);
 
-    // Load audio file into the player context so that spectrum analysis works for this track
-    await loadAudioFile(track.file, false);
-    
-    // Yield to let Astrofox UI and ThreeJS context re-route to the newly loaded audio track
-    await new Promise((r) => setTimeout(r, 800));
+    // Find matching track in the store's playlist to activate it and switch the active artwork
+    const storeState = useAudioStore.getState();
+    const matchingTrack = storeState.playlist.find(
+      (t: any) => t.id === (track as any).id || t.name === track.name
+    );
+
+    if (matchingTrack) {
+      useAudioStore.setState({ activeTrackId: matchingTrack.id });
+      // Yield to let Astrofox UI and ThreeJS context re-route to the newly loaded audio track and artwork
+      await new Promise((r) => setTimeout(r, 300));
+    }
 
     const buffer = track.buffer || track.file;
     if (!track.buffer) {
@@ -228,6 +236,10 @@ export async function exportVideoOffline({
   await audioEncoder.flush();
   await videoEncoder.flush();
   muxer.finalize();
+
+  if (originalActiveTrackId) {
+    useAudioStore.setState({ activeTrackId: originalActiveTrackId });
+  }
 
   const buffer = muxer.target.buffer;
   return new Blob([buffer], { type: exportFormat === 'mp4' ? 'video/mp4' : 'video/webm' });

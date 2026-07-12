@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell, protocol, net } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import path from 'node:path';
@@ -9,12 +9,42 @@ import url from 'node:url';
 log.transports.file.level = 'info';
 autoUpdater.logger = log;
 
+// Register standard scheme for app:// protocol
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+]);
+
 // ─── Path helpers ────────────────────────────────────────────────────────────
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-const NEXT_OUT = path.join(__dirname, '../out');
+const NEXT_OUT = path.join(__dirname, '../../out');
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
+function getMimeType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  switch (ext) {
+    case '.html': return 'text/html; charset=utf-8';
+    case '.js': return 'text/javascript; charset=utf-8';
+    case '.css': return 'text/css; charset=utf-8';
+    case '.json': return 'application/json; charset=utf-8';
+    case '.png': return 'image/png';
+    case '.jpg':
+    case '.jpeg': return 'image/jpeg';
+    case '.gif': return 'image/gif';
+    case '.svg': return 'image/svg+xml';
+    case '.ico': return 'image/x-icon';
+    case '.woff': return 'font/woff';
+    case '.woff2': return 'font/woff2';
+    case '.ttf': return 'font/ttf';
+    case '.otf': return 'font/otf';
+    case '.mp3': return 'audio/mpeg';
+    case '.wav': return 'audio/wav';
+    case '.mp4': return 'video/mp4';
+    case '.webm': return 'video/webm';
+    default: return 'application/octet-stream';
+  }
+}
+
 let mainWindow: BrowserWindow | null = null;
+let hasUnsavedChanges = false;
 
 // ─── Window Creation ─────────────────────────────────────────────────────────
 function createWindow() {
@@ -39,7 +69,7 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(NEXT_OUT, 'index.html'));
+    mainWindow.loadURL('app://-/index.html');
   }
 
   mainWindow.once('ready-to-show', () => {
@@ -47,26 +77,23 @@ function createWindow() {
   });
 
   // ─── Before Quit Warning ──────────────────────────────────────────────
-  mainWindow.on('close', async (e) => {
-    const hasUnsaved = await mainWindow?.webContents
-      .executeJavaScript('window.__astrofox_has_unsaved_changes?.()')
-      .catch(() => false);
-
-    if (hasUnsaved) {
+  mainWindow.on('close', (e) => {
+    if (hasUnsavedChanges) {
       e.preventDefault();
 
-      const { response } = await dialog.showMessageBox(mainWindow!, {
+      dialog.showMessageBox(mainWindow!, {
         type: 'warning',
         title: 'Perubahan Belum Disimpan',
         message: 'Ada perubahan yang belum disimpan. Yakin ingin keluar?',
         buttons: ['Keluar Tanpa Simpan', 'Batal'],
         defaultId: 1,
         cancelId: 1,
+      }).then(({ response }) => {
+        if (response === 0) {
+          hasUnsavedChanges = false;
+          mainWindow?.destroy(); // Force close bypassing the 'close' listener
+        }
       });
-
-      if (response === 0) {
-        mainWindow?.destroy(); // Force close bypassing the 'close' listener
-      }
     }
   });
 
@@ -77,6 +104,32 @@ function createWindow() {
 
 // ─── App Lifecycle ────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
+  // Register app:// protocol handler to serve Next.js static files correctly
+  protocol.handle('app', async (request) => {
+    const urlObj = new URL(request.url);
+    let pathname = urlObj.pathname;
+    
+    // If it's a directory or has no extension, look for index.html inside it
+    if (!path.extname(pathname)) {
+      pathname = path.join(pathname, 'index.html');
+    }
+    
+    const absolutePath = path.join(NEXT_OUT, pathname);
+    
+    try {
+      const data = fs.readFileSync(absolutePath);
+      return new Response(data, {
+        status: 200,
+        headers: {
+          'Content-Type': getMimeType(absolutePath),
+        },
+      });
+    } catch (error) {
+      log.error('Failed to load asset from protocol:', absolutePath, error);
+      return new Response('File not found', { status: 404 });
+    }
+  });
+
   createWindow();
 
   app.on('activate', () => {
@@ -98,6 +151,10 @@ app.on('window-all-closed', () => {
 });
 
 // ─── IPC: Native File Dialogs ─────────────────────────────────────────────────
+ipcMain.on('app:set-unsaved-changes', (_event, hasUnsaved) => {
+  hasUnsavedChanges = hasUnsaved;
+});
+
 ipcMain.handle('dialog:showOpenDialog', async (_event, options) => {
   const result = await dialog.showOpenDialog(mainWindow!, {
     properties: ['openFile', ...(options.multiple ? ['multiSelections' as const] : [])],

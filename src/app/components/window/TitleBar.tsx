@@ -45,9 +45,13 @@ export default function TitleBar() {
     },
   ];
 
+  const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
+  const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent);
+  const leftMargin = isElectron && isMac ? 'ml-20' : 'ml-3';
+
   return (
     <div className={'flex items-center relative h-10 bg-neutral-900 border-b border-b-neutral-700'}>
-      <div className={'flex items-center gap-1.5 ml-3 max-w-[45vw]'}>
+      <div className={`flex items-center gap-1.5 ${leftMargin} max-w-[45vw]`}>
         <img
           alt=""
           aria-hidden="true"

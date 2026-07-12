@@ -4,6 +4,21 @@ import { t } from '@/i18n/config';
 import EventEmitter from '@/lib/core/EventEmitter';
 import type { EventCallback } from '@/lib/types';
 
+declare global {
+  interface Window {
+    electronAPI?: {
+      showOpenDialog: (options: any) => Promise<{
+        canceled: boolean;
+        files: Array<{ name: string; path: string; size: number; data: string }>;
+      }>;
+      showSaveDialog: (options: any) => Promise<{ canceled: boolean; filePath?: string }>;
+      saveFile: (args: { filePath: string; data: ArrayBuffer }) => Promise<{ success: boolean }>;
+      openExternal: (url: string) => void;
+      getVersion: () => Promise<string>;
+    };
+  }
+}
+
 const events = new EventEmitter();
 
 interface FileFilter {
@@ -68,6 +83,13 @@ async function toFile(input: File | FileHandle | null): Promise<File | null> {
 }
 
 async function saveBlob(target: FileHandle | string | null, blob: Blob, fallbackName: string) {
+  if (typeof window !== 'undefined' && window.electronAPI) {
+    const filePath = typeof target === 'string' ? target : fallbackName || 'astrofox';
+    const arrayBuffer = await blob.arrayBuffer();
+    await window.electronAPI.saveFile({ filePath, data: arrayBuffer });
+    return;
+  }
+
   if (target && typeof target === 'object' && 'createWritable' in target && target.createWritable) {
     const writable = await target.createWritable();
     await writable.write(blob);
@@ -125,6 +147,9 @@ async function request(path: string, options: RequestOptions = {}) {
 }
 
 export function getEnvironment() {
+  if (typeof window !== 'undefined' && window.electronAPI) {
+    return { platform: 'electron' };
+  }
   return env;
 }
 
@@ -153,7 +178,45 @@ export function log(...args: unknown[]) {
   console.log(...args);
 }
 
+function base64ToFile(name: string, base64: string, size: number): File {
+  const byteString = atob(base64);
+  const bytes = new Uint8Array(byteString.length);
+  for (let i = 0; i < byteString.length; i++) {
+    bytes[i] = byteString.charCodeAt(i);
+  }
+  
+  // Resolve MIME type from extension to prevent type-based validation failures in the app
+  const ext = name.split('.').pop()?.toLowerCase();
+  let type = '';
+  if (ext === 'mp3') type = 'audio/mpeg';
+  else if (ext === 'wav') type = 'audio/wav';
+  else if (ext === 'm4a') type = 'audio/mp4';
+  else if (ext === 'ogg') type = 'audio/ogg';
+  else if (ext === 'flac') type = 'audio/flac';
+  else if (ext === 'aac') type = 'audio/aac';
+  else if (ext === 'opus') type = 'audio/opus';
+  else if (ext === 'png') type = 'image/png';
+  else if (ext === 'jpg' || ext === 'jpeg') type = 'image/jpeg';
+  else if (ext === 'svg') type = 'image/svg+xml';
+
+  return new File([bytes], name, { type, lastModified: Date.now() });
+}
+
 export async function showOpenDialog(props: OpenDialogProps = {}) {
+  if (typeof window !== 'undefined' && window.electronAPI) {
+    const result = await window.electronAPI.showOpenDialog({
+      filters: props.filters,
+      multiple: props.multiple ?? false,
+    });
+
+    if (result.canceled) {
+      return { canceled: true, files: [] as File[] };
+    }
+
+    const files = result.files.map(f => base64ToFile(f.name, f.data, f.size));
+    return { canceled: false, files };
+  }
+
   const types = buildPickerTypes(props.filters || []);
   const multiple = Boolean(props.multiple);
 
@@ -187,6 +250,15 @@ export async function showOpenDialog(props: OpenDialogProps = {}) {
 }
 
 export async function showSaveDialog(props: SaveDialogProps = {}) {
+  if (typeof window !== 'undefined' && window.electronAPI) {
+    const result = await window.electronAPI.showSaveDialog({
+      filters: props.filters,
+      defaultPath: props.defaultPath,
+    });
+
+    return { canceled: result.canceled, filePath: result.filePath };
+  }
+
   const types = buildPickerTypes(props.filters || []);
   const suggestedName = props.defaultPath || 'astrofox';
 
