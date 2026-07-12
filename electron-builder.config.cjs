@@ -26,8 +26,8 @@ const config = {
   publish: [
     {
       provider: 'github',
-      owner: 'YOUR_GITHUB_USERNAME',   // ← Ganti dengan username GitHub Anda
-      repo: 'astrofox',                // ← Ganti dengan nama repo GitHub Anda
+      owner: 'monlievt',
+      repo: 'astrofox',
       releaseType: 'release',
     },
   ],
