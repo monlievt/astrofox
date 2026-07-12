@@ -1,0 +1,156 @@
+import Display from '@/lib/core/Display';
+import { stageHeight, stageWidth } from '@/lib/utils/controls';
+
+export default class ParticleGalaxyDisplay extends Display {
+  static config = {
+    name: 'ParticleGalaxyDisplay',
+    description:
+      'Concentric particle galaxy visualizer — perfect for binaural, gamma wave, and ambient music. Concentric glowing particle rings orbit a pulsating central core.',
+    type: 'display',
+    label: 'Particle Galaxy',
+    defaultProperties: {
+      orbRadius: 100,
+      orbDetail: 24,
+      ringCount: 8,
+      particleSize: 3.5,
+      colorA: '#8000ff',
+      colorB: '#00ffff',
+      glowIntensity: 15,
+      sensitivity: 1.2,
+      rotationSpeed: 0.3,
+      opacity: 1.0,
+      tiltX: 0,
+      tiltY: 0,
+      tiltZ: 0,
+      x: 0,
+      y: 0,
+      z: 0,
+    },
+    controls: {
+      orbRadius: {
+        label: 'Core Radius',
+        type: 'number',
+        min: 10,
+        max: 500,
+        step: 5,
+        withRange: true,
+      },
+      orbDetail: {
+        label: 'Core Detail',
+        type: 'number',
+        min: 8,
+        max: 64,
+        step: 2,
+        withRange: true,
+      },
+      ringCount: {
+        label: 'Orbit Rings',
+        type: 'number',
+        min: 2,
+        max: 20,
+        step: 1,
+        withRange: true,
+      },
+      particleSize: {
+        label: 'Particle Size',
+        type: 'number',
+        min: 1.0,
+        max: 35.0,
+        step: 0.5,
+        withRange: true,
+      },
+      colorA: {
+        label: 'Core Color',
+        type: 'color',
+      },
+      colorB: {
+        label: 'Galaxy Color',
+        type: 'color',
+      },
+      glowIntensity: {
+        label: 'Glow Intensity',
+        type: 'number',
+        min: 0,
+        max: 100,
+        step: 1,
+        withRange: true,
+      },
+      sensitivity: {
+        label: 'Audio Sensitivity',
+        type: 'number',
+        min: 0,
+        max: 5.0,
+        step: 0.1,
+        withRange: true,
+      },
+      rotationSpeed: {
+        label: 'Rotation Speed',
+        type: 'number',
+        min: 0,
+        max: 2.0,
+        step: 0.05,
+        withRange: true,
+      },
+      opacity: {
+        label: 'Opacity',
+        type: 'number',
+        min: 0,
+        max: 1.0,
+        step: 0.01,
+        withRange: true,
+      },
+      tiltX: {
+        label: 'Tilt X (Horizontal Alignment)',
+        type: 'number',
+        min: -90,
+        max: 90,
+        step: 1,
+        withRange: true,
+      },
+      tiltY: {
+        label: 'Tilt Y (Vertical Alignment)',
+        type: 'number',
+        min: -90,
+        max: 90,
+        step: 1,
+        withRange: true,
+      },
+      tiltZ: {
+        label: 'Spin Z',
+        type: 'number',
+        min: -180,
+        max: 180,
+        step: 1,
+        withRange: true,
+      },
+      x: {
+        label: 'X Offset',
+        type: 'number',
+        min: -600,
+        max: 600,
+        step: 5,
+        withRange: true,
+      },
+      y: {
+        label: 'Y Offset',
+        type: 'number',
+        min: -400,
+        max: 400,
+        step: 5,
+        withRange: true,
+      },
+      z: {
+        label: 'Z Offset',
+        type: 'number',
+        min: -500,
+        max: 500,
+        step: 5,
+        withRange: true,
+      },
+    },
+  };
+
+  constructor(properties?: Record<string, unknown>) {
+    super(ParticleGalaxyDisplay, properties);
+  }
+}

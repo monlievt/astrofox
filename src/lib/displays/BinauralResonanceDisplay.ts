@@ -1,0 +1,171 @@
+import Display from '@/lib/core/Display';
+import { stageHeight, stageWidth } from '@/lib/utils/controls';
+
+export default class BinauralResonanceDisplay extends Display {
+  static config = {
+    name: 'BinauralResonanceDisplay',
+    description:
+      'Double concentric orbital wave rings representing Left and Right audio channels. Overlapping rotations create beautiful moiré interference patterns — perfect for brainwave entrainment and binaural beats.',
+    type: 'display',
+    label: 'Binaural Phased Resonance',
+    defaultProperties: {
+      ringPairs: 2,
+      mirrorEnabled: true,
+      corePulse: true,
+      amplitude: 90,
+      baseRadius: 135,
+      pointCount: 120,
+      colorLeft: '#00f3ff',
+      colorRight: '#b624ff',
+      glowColor: '#00f3ff',
+      glowIntensity: 15,
+      lineWidth: 1.5,
+      webOpacity: 0.15,
+      sensitivity: 1.2,
+      rotationSpeed: 1.0,
+      width: 854,
+      height: 854,
+      x: 0,
+      y: 0,
+      opacity: 1.0,
+    },
+    controls: {
+      width: {
+        label: 'Width',
+        type: 'number',
+        min: 100,
+        max: 2000,
+        step: 10,
+        withRange: true,
+      },
+      height: {
+        label: 'Height',
+        type: 'number',
+        min: 100,
+        max: 2000,
+        step: 10,
+        withRange: true,
+      },
+      baseRadius: {
+        label: 'Ring Size',
+        type: 'number',
+        min: 20,
+        max: 500,
+        step: 5,
+        withRange: true,
+      },
+      ringPairs: {
+        label: 'Ring Pairs (x2)',
+        type: 'number',
+        min: 1,
+        max: 4,
+        step: 1,
+        withRange: true,
+      },
+      mirrorEnabled: {
+        label: 'Mirror Symmetry (Kiri-Kanan)',
+        type: 'toggle',
+      },
+      corePulse: {
+        label: 'Resonating Core Pulse',
+        type: 'toggle',
+      },
+      amplitude: {
+        label: 'Amplitude',
+        type: 'number',
+        min: 10,
+        max: 300,
+        step: 5,
+        withRange: true,
+      },
+      pointCount: {
+        label: 'Wave Density',
+        type: 'number',
+        min: 20,
+        max: 300,
+        step: 10,
+        withRange: true,
+      },
+      rotationSpeed: {
+        label: 'Rotation Speed',
+        type: 'number',
+        min: 0.0,
+        max: 5.0,
+        step: 0.1,
+        withRange: true,
+      },
+      lineWidth: {
+        label: 'Line Width',
+        type: 'number',
+        min: 0.5,
+        max: 6.0,
+        step: 0.5,
+        withRange: true,
+      },
+      webOpacity: {
+        label: 'Web Opacity',
+        type: 'number',
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        withRange: true,
+      },
+      colorLeft: {
+        label: 'Left Ring Color',
+        type: 'color',
+      },
+      colorRight: {
+        label: 'Right Ring Color',
+        type: 'color',
+      },
+      glowColor: {
+        label: 'Glow Color',
+        type: 'color',
+      },
+      glowIntensity: {
+        label: 'Glow Intensity',
+        type: 'number',
+        min: 0,
+        max: 40,
+        step: 1,
+        withRange: true,
+      },
+      sensitivity: {
+        label: 'Audio Sensitivity',
+        type: 'number',
+        min: 0.2,
+        max: 4.0,
+        step: 0.1,
+        withRange: true,
+      },
+      opacity: {
+        label: 'Opacity',
+        type: 'number',
+        min: 0,
+        max: 1.0,
+        step: 0.01,
+        withRange: true,
+      },
+      x: {
+        label: 'X Offset',
+        type: 'number',
+        min: stageWidth(n => -n),
+        max: stageWidth(),
+        withRange: true,
+        hideFill: true,
+      },
+      y: {
+        label: 'Y Offset',
+        type: 'number',
+        min: stageHeight(n => -n),
+        max: stageHeight(),
+        withRange: true,
+        hideFill: true,
+      },
+    },
+  };
+
+  constructor(properties?: Record<string, unknown>) {
+    super(BinauralResonanceDisplay, properties);
+  }
+}

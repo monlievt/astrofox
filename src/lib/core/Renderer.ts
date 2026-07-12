@@ -1,0 +1,239 @@
+import audioStore from '@/app/actions/audio';
+import { analyzer, events, player, reactors, renderBackend } from '@/app/global';
+import type { RenderFrameData } from '@/lib/types';
+import Clock from './Clock';
+
+const VIDEO_RENDERING = -1;
+
+export default class Renderer {
+  rendering: boolean;
+  clock: Clock;
+  frameData: RenderFrameData;
+  time: number;
+  frameCount: number;
+  rafId: number | null;
+  needsRender: boolean;
+  continuousReasons: Set<string>;
+
+  constructor() {
+    this.rendering = false;
+    this.clock = new Clock();
+    this.time = 0;
+    this.frameCount = 0;
+    this.rafId = null;
+    this.needsRender = true;
+    this.continuousReasons = new Set();
+
+    // Frame render data
+    this.frameData = {
+      id: 0,
+      delta: 0,
+      fft: null,
+      td: null,
+      volume: 0,
+      gain: 0,
+      audioPlaying: false,
+      hasUpdate: false,
+      reactors: {},
+    };
+
+    // Bind context
+    this.render = this.render.bind(this);
+    this.handlePlaybackChange = this.handlePlaybackChange.bind(this);
+    this.handleSourceChange = this.handleSourceChange.bind(this);
+
+    // Events
+    player.on('playback-change', this.handlePlaybackChange);
+    player.on('source-change', this.handleSourceChange);
+  }
+
+  resetAnalyzer() {
+    if (player.hasSource()) {
+      analyzer.reset();
+    }
+  }
+
+  handlePlaybackChange() {
+    this.resetAnalyzer();
+    this.requestRender();
+  }
+
+  handleSourceChange() {
+    this.requestRender();
+  }
+
+  shouldKeepRendering() {
+    return player.isPlaying() || this.continuousReasons.size > 0;
+  }
+
+  scheduleRender() {
+    if (this.rafId !== null) {
+      return;
+    }
+
+    this.rafId = window.requestAnimationFrame(this.render);
+  }
+
+  start() {
+    this.time = Date.now();
+    this.rendering = true;
+    this.requestRender();
+  }
+
+  stop() {
+    if (this.rafId !== null) {
+      window.cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+
+    this.rendering = false;
+    this.needsRender = false;
+  }
+
+  requestRender() {
+    this.needsRender = true;
+
+    if (!this.rendering) {
+      this.rendering = true;
+    }
+
+    this.scheduleRender();
+  }
+
+  setContinuousRendering(reason: string, enabled: boolean) {
+    if (enabled) {
+      this.continuousReasons.add(reason);
+      this.start();
+      return;
+    }
+
+    this.continuousReasons.delete(reason);
+    this.requestRender();
+  }
+
+  getFrameData(id: number): RenderFrameData {
+    const {
+      frameData,
+      clock: { delta },
+    } = this;
+    const playing = player.isPlaying();
+    const analysis = player.getAnalysisData({
+      fft: analyzer.fft,
+      td: analyzer.td,
+      gain: analyzer.gain,
+      analyzer: analyzer.analyzer,
+    });
+
+    frameData.id = id;
+    frameData.hasUpdate = playing || id === VIDEO_RENDERING;
+    frameData.audioPlaying = playing;
+    frameData.gain = analysis.gain;
+    frameData.fft = analysis.fft;
+    frameData.td = analysis.td;
+    frameData.reactors = reactors.getResults(frameData);
+    frameData.delta = delta;
+    frameData.inputMode = player.getMode();
+    frameData.isLive = player.isLive();
+    frameData.sourceLabel = player.getSourceLabel();
+    frameData.midiActivity = analysis.activity;
+
+    return frameData;
+  }
+
+  getAudioSample(time: number) {
+    const { fftSize } = analyzer.analyzer;
+    const { playlist, playbackMode, activeTrackId } = audioStore.getState();
+
+    if (playbackMode === 'simultaneous') {
+      const enabledTracks = playlist.filter(t => t.enabled && t.audio);
+      if (enabledTracks.length === 0) return null;
+
+      // Get slices from all enabled tracks
+      const slices = enabledTracks.map(t => {
+        const audio = t.audio!;
+        const pos = audio.getBufferPosition(time);
+        const start = pos - fftSize / 2;
+        const end = pos + fftSize / 2;
+        return {
+          buffer: audio.getAudioSlice(start, end),
+          volume: t.volume,
+        };
+      });
+
+      // Create a mixed AudioBuffer
+      const channels = Math.max(...slices.map(s => s.buffer.numberOfChannels));
+      const sampleRate = slices[0].buffer.sampleRate;
+      const output = player.audioContext.createBuffer(channels, fftSize, sampleRate);
+
+      for (let ch = 0; ch < channels; ch++) {
+        const outData = output.getChannelData(ch);
+        for (let i = 0; i < fftSize; i++) {
+          let sum = 0;
+          for (const slice of slices) {
+            if (ch < slice.buffer.numberOfChannels) {
+              sum += slice.buffer.getChannelData(ch)[i] * slice.volume;
+            }
+          }
+          outData[i] = sum;
+        }
+      }
+      return output;
+    } else {
+      const activeTrack = playlist.find(t => t.id === activeTrackId) || playlist[0];
+      const audio = activeTrack && activeTrack.audio ? activeTrack.audio : player.getAudio();
+      if (!audio) return null;
+      const pos = audio.getBufferPosition(time);
+      const start = pos - fftSize / 2;
+      const end = pos + fftSize / 2;
+
+      return audio.getAudioSlice(start, end);
+    }
+  }
+
+  getFPS() {
+    return this.clock.getFPS();
+  }
+
+  renderFrame(frame: number, fps: number): Promise<Uint8Array> {
+    return renderBackend.renderExportFrame({
+      frame,
+      fps,
+      getAudioSample: this.getAudioSample.bind(this),
+      analyzer,
+      getFrameData: this.getFrameData.bind(this),
+    });
+  }
+
+  render() {
+    this.rafId = null;
+
+    if (!this.rendering) {
+      return;
+    }
+
+    if (!this.shouldKeepRendering() && !this.needsRender) {
+      this.rendering = false;
+      return;
+    }
+
+    const id = ++this.frameCount;
+    this.needsRender = false;
+
+    this.clock.update();
+
+    player.updateAnalysis(analyzer);
+
+    const data = this.getFrameData(id);
+
+    renderBackend.render(data);
+
+    events.emit('render', data);
+
+    if (this.shouldKeepRendering() || this.needsRender) {
+      this.scheduleRender();
+      return;
+    }
+
+    this.rendering = false;
+  }
+}
